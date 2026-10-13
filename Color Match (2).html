@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Color Match</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #4a9f31;
+    --fg: #fff;
+    --panel: rgba(255,255,255,0.42);
+    --font: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fg: #fff; } }
+  :root[data-theme="dark"] { --fg: #fff; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
+  *, *::before, *::after { box-sizing: inherit; }
+  body {
+    margin: 0; height: 100%;
+    font-family: var(--font);
+    color: var(--fg);
+    background: var(--bg);
+    transition: background-color .45s ease;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+  }
+  .screen {
+    position: absolute; inset: 0;
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 22px calc(env(safe-area-inset-bottom, 0px) + 22px);
+    display: flex; flex-direction: column;
+    opacity: 0; pointer-events: none; transition: opacity .3s ease;
+  }
+  .screen.active { opacity: 1; pointer-events: auto; }
+
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 1.6rem; font-weight: 500; padding: 8px 0;
+  }
+  header button {
+    background: none; border: 0; color: inherit; font: inherit; font-size: 1.9rem;
+    line-height: 1; cursor: pointer; padding: 6px; margin: -6px;
+  }
+  button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+  /* Screen 1: memorize */
+  #memo .spacer { flex: 1; }
+  #memo .timer {
+    font-size: clamp(5rem, 24vw, 8rem); font-weight: 900;
+    line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  }
+  #memo .hint { font-size: clamp(1.4rem, 7vw, 2.1rem); font-weight: 500; margin: 14px 0 26px; }
+
+  /* Screen 2: pick */
+  #pick .spacer { flex: 1; }
+  .panel {
+    background: var(--panel);
+    border: 2px solid rgba(255,255,255,.9);
+    border-radius: 34px;
+    padding: 20px 14px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .slider {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 44px; border-radius: 22px; margin: 0;
+    background: #000; outline: none; cursor: pointer;
+  }
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 4px solid #fff; background: transparent;
+    box-shadow: 0 1px 6px rgba(0,0,0,.25);
+  }
+  .slider::-moz-range-thumb {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 4px solid #fff; background: transparent;
+    box-shadow: 0 1px 6px rgba(0,0,0,.25);
+  }
+  .slider:focus-visible { box-shadow: 0 0 0 3px #fff; }
+  .cta {
+    display: block; width: 100%; margin-top: 18px;
+    padding: 18px; border: 0; border-radius: 999px;
+    background: #fff; color: #1a1a1a;
+    font: inherit; font-size: 1.25rem; font-weight: 700; cursor: pointer;
+  }
+  .cta:active { transform: scale(.98); }
+
+  /* Screen 3: result */
+  #result { background: #000; padding: 0; }
+  #result header { position: absolute; left: 22px; right: 22px; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 2; }
+  .half {
+    flex: 1; position: relative; margin: 12px; border-radius: 42px;
+    padding: 22px 30px; display: flex; flex-direction: column;
+    transition: background-color .45s ease;
+  }
+  .half::before {
+    content: ""; position: absolute; inset: 11px; border-radius: 32px;
+    border: 2px dashed rgba(255,255,255,.55); pointer-events: none;
+  }
+  .half.top { margin-top: 0; padding-top: calc(env(safe-area-inset-top, 0px) + 60px); justify-content: flex-end; }
+  .half.bottom { margin-bottom: 0; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
+  .label { font-size: 1.25rem; font-weight: 500; letter-spacing: .06em; margin: 0; }
+  .half.top .label { margin-bottom: 36px; }
+  .half.bottom .label { margin-top: 22px; }
+  .score { font-size: clamp(4rem, 22vw, 7rem); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; margin: 6px 0 14px; }
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip { border: 2px solid rgba(255,255,255,.8); border-radius: 999px; padding: 6px 18px; font-size: 1.2rem; font-weight: 500; }
+  .half.bottom .spacer { flex: 1; }
+  .half.bottom .cta { margin-top: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    body, .half, .screen { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<section id="memo" class="screen active" aria-label="Farbe merken">
+  <header><span>Color Match</span><button type="button" data-close aria-label="Schließen">✕</button></header>
+  <div class="spacer"></div>
+  <div class="timer" id="timer">5.00</div>
+  <div class="hint">Sekunden zum Merken</div>
+</section>
+
+<section id="pick" class="screen" aria-label="Farbe nachbauen">
+  <header><span>Color Match</span><button type="button" data-close aria-label="Schließen">✕</button></header>
+  <div class="spacer"></div>
+  <div class="panel">
+    <input class="slider" id="sL" type="range" min="0" max="100" value="50" aria-label="Helligkeit">
+    <input class="slider" id="sS" type="range" min="0" max="100" value="60" aria-label="Sättigung">
+    <input class="slider" id="sH" type="range" min="0" max="360" value="180" aria-label="Farbton">
+  </div>
+  <button type="button" class="cta" id="confirm">Farbe bestätigen</button>
+</section>
+
+<section id="result" class="screen" aria-label="Ergebnis">
+  <header><span>Color Match</span><button type="button" data-close aria-label="Schließen">✕</button></header>
+  <div class="half top" id="halfTarget">
+    <p class="label">Original</p>
+  </div>
+  <div class="half bottom" id="halfPick">
+    <p class="label">Deine Auswahl</p>
+    <div class="score" id="score">0%</div>
+    <div class="chips">
+      <span class="chip" id="best">Best: –</span>
+      <span class="chip" id="last">Zuletzt: –</span>
+    </div>
+    <div class="spacer"></div>
+    <button type="button" class="cta" id="next">Nächste Runde</button>
+  </div>
+</section>
+
+<script>
+(() => {
+  const MEMO_SECONDS = 5;
+  const $ = s => document.querySelector(s);
+  const body = document.body;
+  const screens = { memo: $('#memo'), pick: $('#pick'), result: $('#result') };
+  const sL = $('#sL'), sS = $('#sS'), sH = $('#sH');
+  const fmt = n => n.toFixed(1).replace('.', ',') + '%';
+  const fmt2 = n => n.toFixed(2).replace('.', ',') + '%';
+
+  let target = null, stats = loadStats(), rafId = null;
+
+  function loadStats() {
+    try { const s = JSON.parse(localStorage.getItem('colormatch-stats')); if (s && typeof s === 'object') return s; } catch (e) {}
+    return { best: null, last: null };
+  }
+  function saveStats() { try { localStorage.setItem('colormatch-stats', JSON.stringify(stats)); } catch (e) {} }
+
+  const hsl = (h, s, l) => `hsl(${h} ${s}% ${l}%)`;
+  function randomTarget() {
+    return { h: Math.floor(Math.random() * 360), s: 45 + Math.random() * 50, l: 30 + Math.random() * 36 };
+  }
+
+  // --- colour math: HSL → RGB → Lab → ΔE ---
+  function hslToRgb(h, s, l) {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return [f(0), f(8), f(4)];
+  }
+  function rgbToLab([r, g, b]) {
+    const lin = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    r = lin(r); g = lin(g); b = lin(b);
+    let x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
+    let y = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 1.0;
+    let z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+    const f = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+    x = f(x); y = f(y); z = f(z);
+    return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+  }
+  function similarity(c1, c2) {
+    const a = rgbToLab(hslToRgb(c1.h, c1.s, c1.l)), b = rgbToLab(hslToRgb(c2.h, c2.s, c2.l));
+    const dE = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    return Math.max(0, Math.min(100, 100 - dE));
+  }
+
+  function show(name) {
+    Object.values(screens).forEach(s => s.classList.remove('active'));
+    screens[name].classList.add('active');
+  }
+
+  // --- Screen 1 ---
+  function startRound() {
+    target = randomTarget();
+    body.style.background = hsl(target.h, target.s, target.l);
+    show('memo');
+    const t0 = performance.now();
+    const timerEl = $('#timer');
+    cancelAnimationFrame(rafId);
+    const tick = now => {
+      const left = Math.max(0, MEMO_SECONDS - (now - t0) / 1000);
+      timerEl.textContent = left.toFixed(2);
+      if (left > 0) rafId = requestAnimationFrame(tick); else startPick();
+    };
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // --- Screen 2 ---
+  function currentPick() { return { h: +sH.value, s: +sS.value, l: +sL.value }; }
+  function paintSliders() {
+    const { h, s, l } = currentPick();
+    sL.style.background = `linear-gradient(90deg, #000, ${hsl(h, s, 50)}, #fff)`;
+    sS.style.background = `linear-gradient(90deg, ${hsl(h, 0, l)}, ${hsl(h, 100, l)})`;
+    sH.style.background = `linear-gradient(90deg, ${[0,60,120,180,240,300,360].map(x => hsl(x, Math.max(s, 60), 55)).join(',')})`;
+    body.style.background = hsl(h, s, l);
+  }
+  function startPick() {
+    sH.value = Math.floor(Math.random() * 360); sS.value = 50; sL.value = 50;
+    paintSliders();
+    show('pick');
+  }
+  [sL, sS, sH].forEach(el => el.addEventListener('input', paintSliders));
+
+  // --- Screen 3 ---
+  $('#confirm').addEventListener('click', () => {
+    const pick = currentPick();
+    const score = similarity(target, pick);
+    const prevLast = stats.last;
+    stats.last = score;
+    if (stats.best == null || score > stats.best) stats.best = score;
+    saveStats();
+
+    body.style.background = '#000';
+    $('#halfTarget').style.background = hsl(target.h, target.s, target.l);
+    $('#halfPick').style.background = hsl(pick.h, pick.s, pick.l);
+    $('#best').textContent = 'Best: ' + fmt(stats.best);
+    $('#last').textContent = 'Zuletzt: ' + (prevLast == null ? '–' : fmt(prevLast));
+    show('result');
+    countUp($('#score'), score);
+  });
+
+  let countId = null;
+  function countUp(el, finalValue) {
+    cancelAnimationFrame(countId);
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { el.textContent = fmt2(finalValue); return; }
+    const duration = 1400, t0 = performance.now();
+    const step = now => {
+      const p = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt2(finalValue * eased);
+      if (p < 1) countId = requestAnimationFrame(step);
+    };
+    countId = requestAnimationFrame(step);
+  }
+
+  $('#next').addEventListener('click', startRound);
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', startRound));
+
+  startRound();
+})();
+</script>
+</body>
+</html>
